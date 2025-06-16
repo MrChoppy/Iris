@@ -1,14 +1,18 @@
 <script>
-  import PcInfo from "./components/pc_info.svelte";
+  import PcInfo from "../lib/components/pc_info.svelte";
+  import Activity from "../lib/components/activity.svelte";
+  import VoiceRecog from "../lib/components/voice_recog.svelte";
 </script>
 
-<div class="top-right">
+<div class="sidebar">
   <PcInfo />
+  <Activity />
+  <VoiceRecog />
 </div>
 
 <style>
 
-  .top-right {
+  .sidebar {
     position: absolute;
     z-index: 10;
     width: 310px;

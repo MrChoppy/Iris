@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 use std::sync::{Arc, Mutex};
-
-use tauri::{Manager, PhysicalPosition, PhysicalSize, WebviewWindow};
+use tauri::{
+    Manager, PhysicalPosition, PhysicalSize, WebviewWindow,
+};
 use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
 use windows::Win32::Foundation::HWND;
 
@@ -25,16 +25,11 @@ fn toggle_click_through(hwnd: HWND, enable: bool) {
     }
 }
 
-fn snap_window_to_right(
-    window: &WebviewWindow,
-    monitor_pos: PhysicalPosition<i32>,
-    monitor_size: PhysicalSize<u32>,
-) {
-    if let Ok(window_size) = window.outer_size() {
-        let new_x = monitor_pos.x + (monitor_size.width as i32) - (window_size.width as i32);
-        let new_y = monitor_pos.y;
-        let _ = window.set_position(PhysicalPosition::new(new_x, new_y));
-    }
+fn snap_window_to_right(window: &WebviewWindow, monitor_pos: PhysicalPosition<i32>, monitor_size: PhysicalSize<u32>) {
+    let window_size = window.outer_size().unwrap();
+    let new_x = monitor_pos.x + (monitor_size.width as i32) - (window_size.width as i32);
+    let new_y = monitor_pos.y;
+    let _ = window.set_position(PhysicalPosition::new(new_x, new_y));
 }
 
 fn main() {
@@ -42,12 +37,17 @@ fn main() {
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
 
+            // Store the original monitor position/size
             let (initial_monitor_pos, initial_monitor_size) = match window.current_monitor().unwrap() {
                 Some(monitor) => (monitor.position().clone(), monitor.size().clone()),
-                None => (PhysicalPosition::new(0, 0), PhysicalSize::new(1920, 1080)),
+                None => (
+                    PhysicalPosition::new(0, 0),
+                    PhysicalSize::new(1920, 1080),
+                ),
             };
 
             snap_window_to_right(&window, initial_monitor_pos, initial_monitor_size);
+
 
             #[cfg(desktop)]
             {
@@ -67,50 +67,40 @@ fn main() {
                             let monitor_size = monitor_size.clone();
 
                             move |app_handle, shortcut, event| {
-                                if event.state == ShortcutState::Pressed
-                                    && shortcut.matches(
+                                if event.state == ShortcutState::Pressed {
+                                    if shortcut.matches(
                                         Modifiers::CONTROL | Modifiers::SHIFT | Modifiers::ALT,
                                         Code::KeyO,
-                                    )
-                                {
-                                    let mut is_interactive = interactive.lock().unwrap();
-                                    let mut is_collapsed = collapsed.lock().unwrap();
+                                    ) {
+                                        let mut is_interactive = interactive.lock().unwrap();
+                                        let mut is_collapsed = collapsed.lock().unwrap();
 
-                                    *is_interactive = !*is_interactive;
-                                    *is_collapsed = !*is_collapsed;
+                                        *is_interactive = !*is_interactive;
+                                        *is_collapsed = !*is_collapsed;
 
-                                    if let Some(window) = app_handle.get_webview_window(&window_label) {
-                                        if let Ok(hwnd) = window.hwnd() {
-                                            toggle_click_through(HWND(hwnd.0), !*is_interactive);
-                                        }
-
-                                        if *is_collapsed {
-                                            if let Ok(size) = window.outer_size() {
-                                                let _ = window.set_size(PhysicalSize::new(0, size.height));
+                                        if let Some(window) = app_handle.get_webview_window(&window_label) {
+                                            if let Ok(hwnd) = window.hwnd() {
+                                                toggle_click_through(HWND(hwnd.0), !*is_interactive);
                                             }
-                                        } else {
-                                            let _ = window.set_size(PhysicalSize::new(320, 1000));
-                                        }
 
-                                        snap_window_to_right(
-                                            &window,
-                                            *monitor_pos.lock().unwrap(),
-                                            *monitor_size.lock().unwrap(),
-                                        );
-
-                                        println!(
-                                            "Window is now {} and {}",
-                                            if *is_interactive {
-                                                "interactive"
-                                            } else {
-                                                "click-through"
-                                            },
                                             if *is_collapsed {
-                                                "collapsed"
+                                                // Collapse to thin strip
+                                                let size = window.outer_size().unwrap();
+                                                window.set_size(PhysicalSize::new(10, size.height)).unwrap();
                                             } else {
-                                                "expanded"
+                                                // Restore to full width
+                                                window.set_size(PhysicalSize::new(320, 1000)).unwrap();
                                             }
-                                        );
+
+                                            // Always snap to original monitor
+                                            snap_window_to_right(&window, *monitor_pos.lock().unwrap(), *monitor_size.lock().unwrap());
+
+                                            println!(
+                                                "Window is now {} and {}",
+                                                if *is_interactive { "interactive" } else { "click-through" },
+                                                if *is_collapsed { "collapsed" } else { "expanded" }
+                                            );
+                                        }
                                     }
                                 }
                             }
